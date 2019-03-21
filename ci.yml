@@ -7,6 +7,11 @@ groups:
       - email-alert-service-build
 
 resources:
+- name: email-alert-service-git
+  type: git
+  source:
+    branch: master
+    uri: https://github.com/alphagov/email-alert-service.git
 - name: frontend-git
   type: git
   source:
@@ -17,11 +22,6 @@ resources:
   source:
     branch: master
     uri: https://github.com/alphagov/govuk-content-schemas.git
-- name: email-alert-service-git
-  type: git
-  source:
-    branch: master
-    uri: https://github.com/alphagov/email-alert-service.git
 
 jobs:
 - name: frontend-build
