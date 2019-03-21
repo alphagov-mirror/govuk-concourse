@@ -1,0 +1,103 @@
+groups:
+  - name: frontends
+    jobs:
+      - frontend-build
+  - name: services
+    jobs:
+      - email-alert-service-build
+
+resources:
+- name: frontend-git
+  type: git
+  source:
+    branch: master
+    uri: https://github.com/alphagov/frontend.git
+- name: govuk-content-schemas-git
+  type: git
+  source:
+    branch: master
+    uri: https://github.com/alphagov/govuk-content-schemas.git
+- name: email-alert-service-git
+  type: git
+  source:
+    branch: master
+    uri: https://github.com/alphagov/email-alert-service.git
+
+jobs:
+- name: frontend-build
+  serial: true
+  plan:
+  - get: frontend-git
+    trigger: true
+  - get: govuk-content-schemas-git
+  - task: tests
+    config:
+      platform: linux
+      image_resource:
+        type: docker-image
+        source:
+          repository: ruby
+          tag: 2.6.1
+      run:
+        path: sh
+        args:
+        - -c
+        - |
+          set -eux
+
+          export GOVUK_CONTENT_SCHEMAS_PATH=`pwd`/govuk-content-schemas-git
+
+          apt-get update
+          apt-get install -y nodejs
+
+          cd frontend-git
+
+          bundle install
+          bundle exec rake test
+      inputs:
+      - name: frontend-git
+      - name: govuk-content-schemas-git
+- name: email-alert-service-build
+  serial: true
+  plan:
+  - get: email-alert-service-git
+    trigger: true
+  - task: tests
+    config:
+      platform: linux
+      image_resource:
+        type: docker-image
+        source:
+          repository: ruby
+          tag: 2.6.1
+      run:
+        path: sh
+        args:
+        - -c
+        - |
+          set -euxv
+
+          echo 'Installing dependencies: [ rabbitmq ; redis ]'
+          apt-get update
+          apt-get install redis-server -y
+          apt-get install rabbitmq-server -y
+
+          echo 'Running dependencies: [ rabbitmq ; redis ]'
+          redis-server      2>&1 >/dev/null &
+          rabbitmq-server   2>&1 >/dev/null &
+
+          sleep 5
+          echo 'Configuring dependiences: [ rabbitmq ]'
+          rabbitmqctl add_user email_alert_service_test email_alert_service_test
+          rabbitmqctl set_permissions -p / email_alert_service_test ".*" ".*" ".*"
+          rabbitmqctl set_user_tags email_alert_service_test administrator
+          rabbitmq-plugins enable rabbitmq_management
+          rabbitmqadmin declare exchange name=email_alert_service_published_documents_test_exchange type=topic
+
+          cd email-alert-service-git
+
+          echo 'Running tests'
+          bundle install
+          bundle exec rake spec
+      inputs:
+      - name: email-alert-service-git
